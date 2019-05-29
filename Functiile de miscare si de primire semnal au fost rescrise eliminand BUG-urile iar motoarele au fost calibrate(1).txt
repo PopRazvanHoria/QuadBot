@@ -1,0 +1,91 @@
+#include <Wire.h>
+#include <Adafruit_PWMServoDriver.h>
+
+Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
+
+#define MIN_PULSE_WIDTH 650
+#define MAX_PULSE_WIDTH 2350
+#define DEFAULT_PULSE_WIDTH 1500
+#define FREQUENCY 50
+#define DURATION 4
+
+
+uint8_t servonum = 0;
+
+const short minPulse [] = {650, 500, 575, 650 , 600, 550, 550, 675, 650, 650, 650, 700};
+const short maxPulse [] = {2400, 2200, 2300, 2350, 2400, 2400, 2375, 2400, 2300, 2350, 2350, 2400};
+
+short iniPos[] = { 180, 0, 180, 0, 90, 90, 90, 90, 90, 90, 90, 90};
+short actPos[] = { 180, 0, 180, 0, 90, 90, 90, 90, 90, 90, 90, 90};
+short finPos[] = { 180, 0, 180, 0, 90, 90, 90, 90, 90, 90, 90, 90};
+
+int moveCond = 1;
+int signalBT = 0;
+float timeStep = 5;
+const short stages = 50;
+
+short moveStage = 0;
+
+void moveServo(int numServo, int grade)
+{
+  pwm.setPWM(numServo, 0, (int(float(map(grade, 0, 180, minPulse[numServo], maxPulse[numServo])) / 1000000 * FREQUENCY * 4096)));
+}
+
+bool notFinPos()
+{
+  for (short i = 0; i < 12; i++)
+    if (iniPos[i] != finPos[i])
+      return 1;
+  return 0;
+}
+
+void moveAct()
+{
+  for (short i = 0; i < 12; i++)
+    moveServo( i, actPos[i]);
+}
+
+void iniFin()
+{
+  for (short i = 0; i < 12; i++)
+    iniPos[i] = finPos[i];
+}
+
+unsigned long period = millis();
+
+void slowMove() {
+
+  if (moveCond)
+  {
+    if (millis() - period > timeStep)
+    {
+      period = millis();
+      moveStage++;
+      for (short i = 0; i < 12; i++)
+        actPos[i] = map(moveStage, 0, stages, iniPos[i], finPos[i]);
+      moveAct();
+      if (moveStage == stages)
+      {
+        moveCond = 0;
+        iniFin();
+        moveStage = 0;
+      }
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(9600);
+  pwm.begin();
+  pwm.setPWMFreq(FREQUENCY);
+}
+
+void loop() {
+
+  if (Serial.available())
+  {
+    signalBT = Serial.parseInt();
+    Serial.flush();
+    Serial.println(signalBT);
+  }
+}
