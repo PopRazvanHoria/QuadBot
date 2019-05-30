@@ -33,7 +33,7 @@ short walkFr[8][12] = {
 
 
 int moveCond = 1;
-int signalBT = 0;
+int signalBT = 1;
 float timeStep = 5;
 const short stages = 50;
 
@@ -101,9 +101,26 @@ void walkFin(short j)
     finPos[i] = walkFr[j][i];
 }
 
+void walkBak(short j)
+{
+  moveCond = 1;
+  for (short i = 0; i < 12; i++)
+    if (i < 4)
+      finPos[i] = walkFr[j][i];
+    else
+      finPos[i] = 180 - walkFr[j][i];
+
+
+}
+
 void walkF()
 {
   walkFin(walkStage);
+}
+
+void walkB()
+{
+  walkBak(walkStage);
 }
 
 void loop() {
@@ -115,9 +132,20 @@ void loop() {
     Serial.println(signalBT);
   }
   if (!moveCond)
-    if(signalBT)
+    switch (signalBT)
+    {
+      case 1 :
         walkF();
         if (walkStage < 7)
           walkStage++;
         else walkStage = 0;
+        break;
+      case 2 :
+        walkB();
+        if (walkStage < 7)
+          walkStage++;
+        else walkStage = 0;
+        break;
+    }
+
 }
