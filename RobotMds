@@ -19,12 +19,26 @@ short iniPos[] = { 180, 0, 180, 0, 90, 90, 90, 90, 90, 90, 90, 90};
 short actPos[] = { 180, 0, 180, 0, 90, 90, 90, 90, 90, 90, 90, 90};
 short finPos[] = { 180, 0, 180, 0, 90, 90, 90, 90, 90, 90, 90, 90};
 
+short walkFr[8][12] = {
+  //0    1   2   3   4   5  6   7   8   9   10  11
+  { 180, 0, 180, 0, 55, 90, 125, 90, 125, 90, 55, 90},
+  { 180, 0, 180, 0, 55, 55, 125, 125, 125, 125, 55, 55},
+  { 180, 0, 180, 0, 90, 55, 90, 125, 90, 125, 90, 55},
+  { 180, 0, 180, 0, 90, 90, 90, 90, 90, 55, 90, 125},
+  { 180, 0, 180, 0, 90, 125, 90, 55, 90, 55, 90, 125},
+  { 180, 0, 180, 0, 125, 125, 55, 55, 55, 55, 125, 125},
+  { 180, 0, 180, 0, 125, 90, 55, 90, 55, 90, 125, 90},
+  { 180, 0, 180, 0, 90, 90, 90, 90, 125, 90, 55, 90}
+};
+
+
 int moveCond = 1;
 int signalBT = 0;
 float timeStep = 5;
 const short stages = 50;
 
 short moveStage = 0;
+short walkStage = 0;
 
 void moveServo(int numServo, int grade)
 {
@@ -80,6 +94,18 @@ void setup() {
   pwm.setPWMFreq(FREQUENCY);
 }
 
+void walkFin(short j)
+{
+  moveCond = 1;
+  for (short i = 0; i < 12; i++)
+    finPos[i] = walkFr[j][i];
+}
+
+void walkF()
+{
+  walkFin(walkStage);
+}
+
 void loop() {
 
   if (Serial.available())
@@ -88,4 +114,10 @@ void loop() {
     Serial.flush();
     Serial.println(signalBT);
   }
+  if (!moveCond)
+    if(signalBT)
+        walkF();
+        if (walkStage < 7)
+          walkStage++;
+        else walkStage = 0;
 }
