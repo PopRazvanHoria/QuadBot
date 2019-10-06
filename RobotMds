@@ -1,0 +1,264 @@
+#include <Wire.h>
+#include <Adafruit_PWMServoDriver.h>
+
+Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
+
+#define MIN_PULSE_WIDTH 650
+#define MAX_PULSE_WIDTH 2350
+#define DEFAULT_PULSE_WIDTH 1500
+#define FREQUENCY 50
+#define DURATION 4
+
+
+uint8_t servonum = 0;
+
+const short minPulse [] = {650, 500, 575, 650 , 600, 550, 550, 675, 650, 650, 650, 700};
+const short maxPulse [] = {2400, 2200, 2300, 2350, 2400, 2400, 2375, 2400, 2300, 2350, 2350, 2400};
+const short setupPos [] = { 180, 0, 180, 0, 90, 90, 90, 90, 90, 90, 90, 90};
+
+short iniPos[] = { 180, 0, 180, 0, 90, 90, 90, 90, 90, 90, 90, 90};
+short actPos[] = { 180, 0, 180, 0, 90, 90, 90, 90, 90, 90, 90, 90};
+short finPos[] = { 180, 0, 180, 0, 90, 90, 90, 90, 90, 90, 90, 90};
+
+short twsPos[] = { 0, 180, 0, 180, 90, 90, 90, 90, 90, 90, 90, 90};
+short lowPos[] = {135, 45, 135, 45, 135, 45, 135, 45, 45, 135, 45, 135};
+short extPos[] = {180, 0, 180, 0, 180, 0, 180, 0, 90, 90, 90, 90};
+short walkFr[8][12] = {
+  //0    1   2   3   4   5  6   7   8   9   10  11
+  { 180, 0, 180, 0, 55, 90, 125, 90, 125, 90, 55, 90},
+  { 180, 0, 180, 0, 55, 55, 125, 125, 125, 125, 55, 55},
+  { 180, 0, 180, 0, 90, 55, 90, 125, 90, 125, 90, 55},
+  { 180, 0, 180, 0, 90, 90, 90, 90, 90, 55, 90, 125},
+  { 180, 0, 180, 0, 90, 125, 90, 55, 90, 55, 90, 125},
+  { 180, 0, 180, 0, 125, 125, 55, 55, 55, 55, 125, 125},
+  { 180, 0, 180, 0, 125, 90, 55, 90, 55, 90, 125, 90},
+  { 180, 0, 180, 0, 90, 90, 90, 90, 125, 90, 55, 90}
+};
+
+short rotateRight[6][12] = {
+  //0    1   2   3   4    5   6    7   8   9   10  11
+  //{135, 45, 135, 45, 135, 45, 135, 45, 45, 135, 45, 135},
+  {135, 45, 135, 45, 160, 45, 160, 45, 45, 135, 45, 135},
+  {135, 15, 135, 15, 160, 45, 160, 45, 45, 135, 45, 135},
+  {150, 15, 150, 15, 135, 45, 135, 45, 45, 135, 45, 135},
+  {150, 15, 150, 15, 135, 20, 135, 20, 45, 135, 45, 135},
+  {105, 75, 105, 75, 135, 20, 135, 20, 45, 135, 45, 135},
+  {105, 75, 105, 75, 135, 45, 135, 45, 45, 135, 45, 135}
+  //{105, 75, 105, 75, 135, 45, 135, 45, 45, 135, 45, 135}
+
+};
+
+short getUp[7][12] = {
+  //0    1   2   3   4   5  6   7   8   9   10  11
+  {180, 0, 180, 0, 180, 0, 180, 0, 90, 90, 90, 90},
+  {180, 0, 180, 0, 180, 0, 180, 0, 90, 90, 90, 90},
+  {180, 0, 180, 0, 90, 90, 90, 90, 180, 0, 180, 0},
+  {180, 0, 180, 0, 90, 90, 90, 90, 180, 0, 180, 0},
+  {180, 0, 180, 0, 180, 0, 180, 0, 0, 180, 0, 180},
+  {180, 0, 180, 0, 180, 0, 180, 0, 0, 180, 0, 180},
+  { 180, 0, 180, 0, 90, 90, 90, 90, 90, 90, 90, 90}
+};
+
+int moveCond = 1;
+int signalBT = 8;
+float timeStep = 5;
+const short stages = 50;
+
+short moveStage = 0;
+short walkStage = 0;
+short rotateStage = 0;
+short upStage = 0;
+
+void moveServo(int numServo, int grade)
+{
+  pwm.setPWM(numServo, 0, (int(float(map(grade, 0, 180, minPulse[numServo], maxPulse[numServo])) / 1000000 * FREQUENCY * 4096)));
+}
+
+bool notFinPos()
+{
+  for (short i = 0; i < 12; i++)
+    if (iniPos[i] != finPos[i])
+      return 1;
+  return 0;
+}
+
+void moveAct()
+{
+  for (short i = 0; i < 12; i++)
+    moveServo( i, actPos[i]);
+}
+
+void moveSetup()
+{
+  moveCond = 1;
+  for (short i = 0; i < 12; i++)
+    finPos[i] = setupPos[i];
+}
+
+void iniFin()
+{
+  for (short i = 0; i < 12; i++)
+    iniPos[i] = finPos[i];
+}
+
+unsigned long period = millis();
+
+void slowMove() {
+
+  if (moveCond)
+  {
+    if (millis() - period > timeStep)
+    {
+      period = millis();
+      moveStage++;
+      for (short i = 0; i < 12; i++)
+        actPos[i] = map(moveStage, 0, stages, iniPos[i], finPos[i]);
+      moveAct();
+      if (moveStage == stages)
+      {
+        moveCond = 0;
+        iniFin();
+        moveStage = 0;
+      }
+    }
+  }
+}
+void cruch()
+{
+  moveCond = 1;
+  for (short i = 0; i < 12; i++)
+    finPos[i] = lowPos[i];
+}
+
+void twist()
+{
+  moveCond = 1;
+  for (short i = 0; i < 12; i++)
+    finPos[i] = twsPos[i];
+}
+
+void extend()
+{
+  moveCond = 1;
+  for (short i = 0; i < 12; i++)
+    finPos[i] = extPos[i];
+}
+
+void setup() {
+  Serial.begin(9600);
+  pwm.begin();
+  pwm.setPWMFreq(FREQUENCY);
+  moveSetup();
+}
+
+void walkFin(short j)
+{
+  moveCond = 1;
+  for (short i = 0; i < 12; i++)
+    finPos[i] = walkFr[j][i];
+}
+
+void getU(short j)
+{
+  moveCond = 1;
+  for (short i = 0; i < 12; i++)
+    finPos[i] = getUp[j][i];
+}
+
+void rotateRig(short j)
+{
+  moveCond = 1;
+  for (short i = 0; i < 12; i++)
+    finPos[i] = rotateRight[j][i];
+}
+
+void walkBak(short j)
+{
+  moveCond = 1;
+  for (short i = 0; i < 12; i++)
+    if (i < 4)
+      finPos[i] = walkFr[j][i];
+    else
+      finPos[i] = 180 - walkFr[j][i];
+
+
+}
+void rotateR()
+{
+  rotateRig(rotateStage);
+}
+
+void walkF()
+{
+  walkFin(walkStage);
+}
+
+void walkB()
+{
+  walkBak(walkStage);
+}
+
+void rise()
+{
+  getU(upStage);
+}
+
+void loop() {
+
+  if (Serial.available())
+  {
+    signalBT = Serial.parseInt();
+    Serial.flush();
+    Serial.println(signalBT);
+  }
+  if (!moveCond)
+    switch (signalBT)
+    {
+      case 1 :
+        walkF();
+        if (walkStage < 7)
+          walkStage++;
+        else walkStage = 0;
+        break;
+      case 2 :
+        rotateR();
+        if (rotateStage < 5)
+          rotateStage++;
+        else rotateStage = 0;
+        break;
+      case 3 :
+        walkB();
+        if (walkStage < 7)
+          walkStage++;
+        else walkStage = 0;
+        break;
+      case 4 :
+        rotateR();
+        if (rotateStage > 0)
+          rotateStage--;
+        else rotateStage = 5;
+        break;
+      case 5:
+        cruch();
+        break;
+      case 6:
+        twist();
+        break;
+      case 7:
+        moveSetup();
+        break;
+      case 8:
+        extend();
+        break;
+        case 9 :
+        rise();
+        if (upStage < 6)
+          upStage++;
+        else {
+          upStage = 0;
+          signalBT=7;
+        }
+        break;
+    }
+
+}
